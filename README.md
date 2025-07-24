@@ -1,73 +1,156 @@
-# Welcome to your Lovable project
+# 🧠 Mermaideer – AI‑Powered Mermaid Diagram Editor
 
-## Project info
+**Mermaideer** is an interactive web app for creating, editing, and exporting [Mermaid](https://mermaid-js.github.io/) diagrams with the help of AI.
 
-**URL**: https://lovable.dev/projects/f5673739-9bda-40c4-b384-6bc7f1288569
+Built with **React + TypeScript + Vite**, it offers a sleek interface powered by **Monaco Editor**, modern UI components, and OpenAI integration. Whether you're diagramming workflows, architecture, or UML, Mermaideer streamlines your process from idea to export.
 
-## How can I edit this code?
+---
 
-There are several ways of editing your application.
+## ✨ Features
 
-**Use Lovable**
+* 🎨 **Live Mermaid Diagram Preview**
+* 🤖 **AI Prompt-to-Diagram Generation** (via OpenAI API)
+* 🧠 **Code Suggestions** via Monaco Editor
+* 🌓 **Light/Dark Mode Toggle**
+* 📤 **Export to SVG, PNG, or PDF**
+* 🧭 **Local Storage for Persistence**
+* 🪄 **Beautiful, Reusable UI Components** (built with ShadCN + TailwindCSS)
+* 📦 Minimal, Fast, and Extensible
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/f5673739-9bda-40c4-b384-6bc7f1288569) and start prompting.
+---
 
-Changes made via Lovable will be committed automatically to this repo.
+## 📦 Tech Stack
 
-**Use your preferred IDE**
+| Area               | Tech Details            |
+| ------------------ | ----------------------- |
+| **Frontend**       | React, TypeScript, Vite |
+| **Editor**         | Monaco Editor           |
+| **Diagram Engine** | Mermaid.js              |
+| **AI Assistant**   | OpenAI API              |
+| **Styling**        | TailwindCSS, ShadCN UI  |
+| **Export**         | html-to-image, jspdf    |
+| **Notifications**  | Sonner (toasts)         |
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+---
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+## 🚀 Getting Started
 
-Follow these steps:
+### 1. Clone the Repository
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+```bash
+git clone https://github.com/nakul-lumiotech/mermaideer.git
+cd mermaideer
+```
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+### 2. Install Dependencies
 
-# Step 3: Install the necessary dependencies.
-npm i
+```bash
+npm install
+```
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+### 3. Add Your OpenAI API Key
+
+Create a `.env` file:
+
+```env
+VITE_OPENAI_API_KEY=your-api-key-here
+```
+
+### 4. Start the App
+
+```bash
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+App will be live at [http://localhost:5173](http://localhost:5173)
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+---
 
-**Use GitHub Codespaces**
+## 🧠 How It Works
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+### 🧾 Code + Preview
 
-## What technologies are used for this project?
+The Monaco editor (like VS Code) provides Mermaid syntax highlighting and autocompletion. Changes instantly reflect in the preview pane.
 
-This project is built with:
+### 🤖 AI Assistant
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+Enter a natural-language prompt like:
 
-## How can I deploy this project?
+> "A Kubernetes cluster with 3 pods, a service, and ingress"
 
-Simply open [Lovable](https://lovable.dev/projects/f5673739-9bda-40c4-b384-6bc7f1288569) and click on Share -> Publish.
+And get valid Mermaid code generated using the OpenAI API.
 
-## Can I connect a custom domain to my Lovable project?
+### 📤 Export Options
 
-Yes, you can!
+Use built-in buttons to export the rendered diagram as:
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+* SVG
+* PNG
+* PDF
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+---
+
+## 📂 Project Structure
+
+```
+src/
+│
+├── components/           # UI and diagram components
+│   ├── ui/               # Reusable UI (buttons, cards, etc.)
+│   └── MermaidDiagramMaker.tsx
+│
+├── pages/
+│   ├── Index.tsx         # Main diagram page
+│   └── NotFound.tsx
+│
+├── lib/                  # Utility functions
+│
+├── App.tsx               # App entry point
+└── index.css, main.tsx
+```
+
+---
+
+## 🧩 Notable Components
+
+| Component                   | Purpose                                      |
+| --------------------------- | -------------------------------------------- |
+| `MermaidDiagramMaker`       | Main editor + preview + export functionality |
+| `use-toast.ts`              | Custom hook for showing toast notifications  |
+| `toggle.tsx`                | Theme switcher (light/dark)                  |
+| `toaster.tsx`, `sonner.tsx` | Notification system                          |
+
+---
+
+## 🛠️ Customization
+
+* **Theme & Design Tokens**: Controlled via `tailwind.config.ts`
+* **Mermaid Styles**: Update `index.css` with `.mermaid` custom styles
+* **API Key**: Stored securely via Vite env variables
+
+---
+
+## 📜 License
+
+This project currently does not specify a license. Please add one (`LICENSE.md`) to enable reuse and contributions.
+
+---
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create your branch: `git checkout -b feature/your-feature`
+3. Commit your changes: `git commit -m "Add your feature"`
+4. Push to the branch: `git push origin feature/your-feature`
+5. Open a pull request 🚀
+
+---
+
+## 🙌 Acknowledgments
+
+* [Mermaid.js](https://mermaid-js.github.io/) – diagram rendering
+* [Monaco Editor](https://microsoft.github.io/monaco-editor/) – in-browser code editor
+* [OpenAI API](https://platform.openai.com) – prompt-to-code
+* [Sonner](https://sonner.emilkowal.ski/) – elegant toast notifications
+
+---
