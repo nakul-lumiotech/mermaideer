@@ -37,6 +37,7 @@ const Index = () => {
           <a href="https://lumiotech.in/license" className="underline">License</a>
         </p>
       </div>
+
     </div>
   );
 };

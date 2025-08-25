@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+
 import { Copy, Sparkles, Moon, Sun, Key, RefreshCw, AlertCircle, ZoomIn, ZoomOut, Maximize2, X } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useTheme } from '@/components/ui/theme-provider';
@@ -623,6 +624,7 @@ export const MermaidDiagramMaker: React.FC = () => {
                         {isGenerating ? (
                           <RefreshCw className="h-4 w-4 animate-spin" />
                         ) : (
+
                           <Sparkles className="h-4 w-4" />
                         )}
                         AI
@@ -703,6 +705,7 @@ export const MermaidDiagramMaker: React.FC = () => {
                 ref={diagramContainerRef}
                 onMouseDown={handleMouseDown}
                 onWheel={handleWheel}
+
                 className="border rounded-lg p-4 bg-background min-h-[70vh] overflow-hidden cursor-grab"
                 style={getGridStyle()}
               >
