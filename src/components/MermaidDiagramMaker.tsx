@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Copy, Bot, Moon, Sun, Key, RefreshCw, AlertCircle, ZoomIn, ZoomOut, Maximize2, X } from 'lucide-react';
+
+import { Copy, Sparkles, Moon, Sun, Key, RefreshCw, AlertCircle, ZoomIn, ZoomOut, Maximize2, X } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useTheme } from '@/components/ui/theme-provider';
 import Editor from '@monaco-editor/react';
@@ -171,7 +172,7 @@ export const MermaidDiagramMaker: React.FC = () => {
     }
   };
 
-  const generateDiagramWithAI = async () => {
+  const generateDiagramWithAI = async (promptOverride?: string) => {
     if (!apiKey.trim()) {
       setShowApiKeyInput(true);
       toast({
@@ -181,8 +182,8 @@ export const MermaidDiagramMaker: React.FC = () => {
       });
       return;
     }
-
-    if (!aiPrompt.trim()) {
+    const prompt = promptOverride ?? aiPrompt;
+    if (!prompt.trim()) {
       toast({
         title: "Prompt Required",
         description: "Please describe the diagram you want to create.",
@@ -220,14 +221,14 @@ export const MermaidDiagramMaker: React.FC = () => {
             model: 'claude-3-opus-20240229',
             max_tokens: 1500,
             system: systemPrompt,
-            messages: [{ role: 'user', content: aiPrompt }],
+            messages: [{ role: 'user', content: prompt }],
           };
           parseResponse = (data) => data.content?.[0]?.text?.trim() || '';
           break;
         case 'gemini':
           url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`;
           headers = { 'Content-Type': 'application/json' };
-          body = { contents: [{ parts: [{ text: `${systemPrompt}\n${aiPrompt}` }] }] };
+          body = { contents: [{ parts: [{ text: `\n` }] }] };
           parseResponse = (data) => data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
           break;
         case 'openrouter':
@@ -240,7 +241,7 @@ export const MermaidDiagramMaker: React.FC = () => {
             model: 'openrouter/auto',
             messages: [
               { role: 'system', content: systemPrompt },
-              { role: 'user', content: aiPrompt },
+              { role: 'user', content: prompt },
             ],
             max_tokens: 1500,
             temperature: 0.7,
@@ -257,7 +258,7 @@ export const MermaidDiagramMaker: React.FC = () => {
             model: 'gpt-4',
             messages: [
               { role: 'system', content: systemPrompt },
-              { role: 'user', content: aiPrompt },
+              { role: 'user', content: prompt },
             ],
             max_tokens: 1500,
             temperature: 0.7,
@@ -333,6 +334,11 @@ export const MermaidDiagramMaker: React.FC = () => {
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const fixDiagramWithAI = () => {
+    const fixPrompt = `Fix the following Mermaid diagram code and return only valid Mermaid syntax.\nError: ${error.message}\n\n${mermaidCode}`;
+    generateDiagramWithAI(fixPrompt);
   };
 
   const copyToClipboard = async () => {
@@ -517,7 +523,7 @@ export const MermaidDiagramMaker: React.FC = () => {
         <div className="w-full px-4 py-4">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-              Mermaid Diagram Maker
+              Mermaideer
             </h1>
             <div className="flex items-center gap-2">
               <Button
@@ -618,7 +624,8 @@ export const MermaidDiagramMaker: React.FC = () => {
                         {isGenerating ? (
                           <RefreshCw className="h-4 w-4 animate-spin" />
                         ) : (
-                          <Bot className="h-4 w-4" />
+
+                          <Sparkles className="h-4 w-4" />
                         )}
                         AI
                       </Button>
@@ -630,15 +637,6 @@ export const MermaidDiagramMaker: React.FC = () => {
                   </Button>
                 </div>
               </div>
-              
-              {error.hasError && (
-                <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
-                  <div className="flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4 flex-shrink-0" />
-                    <span>{error.message}</span>
-                  </div>
-                </div>
-              )}
               
               <div className="border rounded-lg overflow-hidden bg-background">
                 <Editor
@@ -707,7 +705,8 @@ export const MermaidDiagramMaker: React.FC = () => {
                 ref={diagramContainerRef}
                 onMouseDown={handleMouseDown}
                 onWheel={handleWheel}
-                className="border rounded-lg p-4 bg-background min-h-[70vh] flex items-center justify-center overflow-hidden cursor-grab"
+
+                className="border rounded-lg p-4 bg-background min-h-[70vh] overflow-hidden cursor-grab"
                 style={getGridStyle()}
               >
                 <div
@@ -718,9 +717,15 @@ export const MermaidDiagramMaker: React.FC = () => {
               </div>
               {error.hasError && (
                 <div className="mt-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
-                  <div className="flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4 flex-shrink-0" />
-                    <span>{error.message}</span>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                      <span>{error.message}</span>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={fixDiagramWithAI} className="gap-1">
+                      <Sparkles className="h-4 w-4" />
+                      Fix
+                    </Button>
                   </div>
                 </div>
               )}
