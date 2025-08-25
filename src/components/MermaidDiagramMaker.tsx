@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Copy, Download, Bot, Moon, Sun, Key, RefreshCw, AlertCircle, X } from 'lucide-react';
+import { Copy, Bot, Moon, Sun, Key, RefreshCw, AlertCircle, X } from 'lucide-react';
 import { useTheme } from '@/components/ui/theme-provider';
 import Editor from '@monaco-editor/react';
 import mermaid from 'mermaid';
@@ -41,10 +41,15 @@ export const MermaidDiagramMaker: React.FC = () => {
   const [aiPrompt, setAiPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [apiKey, setApiKey] = useState('');
+  const [provider, setProvider] = useState<'openai' | 'anthropic' | 'gemini' | 'openrouter'>('openai');
   const [showApiKeyInput, setShowApiKeyInput] = useState(false);
   const [showAiInput, setShowAiInput] = useState(false);
   const [error, setError] = useState<ErrorState>({ hasError: false, message: '' });
+  const [gridPattern, setGridPattern] = useState<'dots' | 'lines' | 'none'>('dots');
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const startPos = useRef<{ x: number; y: number } | null>(null);
   const diagramRef = useRef<HTMLDivElement>(null);
+  const diagramContainerRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const { theme, setTheme } = useTheme();
 
@@ -82,13 +87,20 @@ export const MermaidDiagramMaker: React.FC = () => {
     }
   }, [theme]);
 
-  // Load API key from localStorage
+  // Load provider and API key from localStorage
   useEffect(() => {
-    const savedApiKey = localStorage.getItem('openai_api_key');
-    if (savedApiKey) {
-      setApiKey(savedApiKey);
+    const storedProvider = (localStorage.getItem('api_provider') as 'openai' | 'anthropic' | 'gemini' | 'openrouter') || 'openai';
+    setProvider(storedProvider);
+    const storedKey = localStorage.getItem(`api_key_${storedProvider}`);
+    if (storedKey) {
+      setApiKey(storedKey);
     }
   }, []);
+
+  useEffect(() => {
+    const storedKey = localStorage.getItem(`api_key_${provider}`);
+    setApiKey(storedKey || '');
+  }, [provider]);
 
   // Render Mermaid diagram with error handling
   useEffect(() => {
@@ -131,11 +143,12 @@ export const MermaidDiagramMaker: React.FC = () => {
   const saveApiKey = () => {
     try {
       if (apiKey.trim()) {
-        localStorage.setItem('openai_api_key', apiKey.trim());
+        localStorage.setItem(`api_key_${provider}`, apiKey.trim());
+        localStorage.setItem('api_provider', provider);
         setShowApiKeyInput(false);
         toast({
-          title: "API Key Saved",
-          description: "Your OpenAI API key has been saved locally.",
+          title: 'API Key Saved',
+          description: `Your ${provider} API key has been saved locally.`,
         });
       }
     } catch (error) {
@@ -151,9 +164,9 @@ export const MermaidDiagramMaker: React.FC = () => {
     if (!apiKey.trim()) {
       setShowApiKeyInput(true);
       toast({
-        title: "API Key Required",
-        description: "Please enter your OpenAI API key to use AI features.",
-        variant: "destructive"
+        title: 'API Key Required',
+        description: `Please enter your ${provider} API key to use AI features.`,
+        variant: 'destructive'
       });
       return;
     }
@@ -170,33 +183,80 @@ export const MermaidDiagramMaker: React.FC = () => {
     setIsGenerating(true);
     setError({ hasError: false, message: '' });
 
-    try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model: 'gpt-4',
-          messages: [
-            {
-              role: 'system',
-              content: `You are a helpful assistant that generates Mermaid.js diagram code. Follow these rules:
+    const systemPrompt = `You are a helpful assistant that generates Mermaid.js diagram code. Follow these rules:
               1. Always respond with valid Mermaid syntax only, no explanations or markdown formatting
               2. Use intelligent auto layout with proper spacing and styling
               3. Add classDef styling for better visual appeal
               4. Use meaningful node names and clear connections
-              5. Focus on creating clear, well-structured diagrams with good visual hierarchy`
-            },
-            {
-              role: 'user',
-              content: aiPrompt
-            }
-          ],
-          max_tokens: 1500,
-          temperature: 0.7,
-        }),
+              5. Focus on creating clear, well-structured diagrams with good visual hierarchy`;
+
+    try {
+      let url = '';
+      let headers: Record<string, string> = {};
+      let body: any = {};
+      let parseResponse = (data: any) => '';
+
+      switch (provider) {
+        case 'anthropic':
+          url = 'https://api.anthropic.com/v1/messages';
+          headers = {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+          };
+          body = {
+            model: 'claude-3-opus-20240229',
+            max_tokens: 1500,
+            system: systemPrompt,
+            messages: [{ role: 'user', content: aiPrompt }],
+          };
+          parseResponse = (data) => data.content?.[0]?.text?.trim() || '';
+          break;
+        case 'gemini':
+          url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`;
+          headers = { 'Content-Type': 'application/json' };
+          body = { contents: [{ parts: [{ text: `${systemPrompt}\n${aiPrompt}` }] }] };
+          parseResponse = (data) => data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+          break;
+        case 'openrouter':
+          url = 'https://openrouter.ai/api/v1/chat/completions';
+          headers = {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+          };
+          body = {
+            model: 'openrouter/auto',
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: aiPrompt },
+            ],
+            max_tokens: 1500,
+            temperature: 0.7,
+          };
+          parseResponse = (data) => data.choices?.[0]?.message?.content?.trim() || '';
+          break;
+        default:
+          url = 'https://api.openai.com/v1/chat/completions';
+          headers = {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+          };
+          body = {
+            model: 'gpt-4',
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: aiPrompt },
+            ],
+            max_tokens: 1500,
+            temperature: 0.7,
+          };
+          parseResponse = (data) => data.choices?.[0]?.message?.content?.trim() || '';
+      }
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) {
@@ -205,32 +265,31 @@ export const MermaidDiagramMaker: React.FC = () => {
       }
 
       const data = await response.json();
-      const generatedCode = data.choices[0]?.message?.content?.trim() || '';
-      
+      const generatedCode = parseResponse(data);
+
       if (!generatedCode) {
         throw new Error('No diagram code generated');
       }
 
-      // Update the Mermaid code in the editor
       setMermaidCode(generatedCode);
       setShowAiInput(false);
       setAiPrompt('');
-      
+
       toast({
-        title: "Diagram Generated",
-        description: "AI has generated a new Mermaid diagram for you!",
+        title: 'Diagram Generated',
+        description: 'AI has generated a new Mermaid diagram for you!',
       });
     } catch (error) {
       console.error('Error generating diagram:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       setError({ hasError: true, message: `AI Generation Failed: ${errorMessage}` });
-      
+
       toast({
-        title: "Generation Failed",
-        description: errorMessage.includes('API Error') 
-          ? "Please check your API key and try again."
+        title: 'Generation Failed',
+        description: errorMessage.includes('API Error')
+          ? 'Please check your API key and try again.'
           : errorMessage,
-        variant: "destructive"
+        variant: 'destructive'
       });
     } finally {
       setIsGenerating(false);
@@ -263,7 +322,7 @@ export const MermaidDiagramMaker: React.FC = () => {
   };
 
   const downloadDiagram = async (format: 'png' | 'svg' | 'pdf') => {
-    if (!diagramRef.current) {
+    if (!diagramRef.current || !diagramContainerRef.current) {
       toast({
         title: "Download Failed",
         description: "No diagram available to download.",
@@ -271,6 +330,10 @@ export const MermaidDiagramMaker: React.FC = () => {
       });
       return;
     }
+
+    const target = diagramContainerRef.current;
+    const prevTransform = diagramRef.current.style.transform;
+    diagramRef.current.style.transform = 'translate(0px, 0px)';
 
     try {
       if (format === 'svg') {
@@ -286,9 +349,9 @@ export const MermaidDiagramMaker: React.FC = () => {
           URL.revokeObjectURL(url);
         }
       } else if (format === 'png') {
-        const canvas = await html2canvas(diagramRef.current, {
+        const canvas = await html2canvas(target, {
           backgroundColor: theme === 'dark' ? '#1f2937' : '#ffffff',
-          scale: 2
+          scale: 4
         });
         const url = canvas.toDataURL('image/png');
         const a = document.createElement('a');
@@ -296,9 +359,9 @@ export const MermaidDiagramMaker: React.FC = () => {
         a.download = 'mermaid-diagram.png';
         a.click();
       } else if (format === 'pdf') {
-        const canvas = await html2canvas(diagramRef.current, {
+        const canvas = await html2canvas(target, {
           backgroundColor: theme === 'dark' ? '#1f2937' : '#ffffff',
-          scale: 2
+          scale: 4
         });
         const imgData = canvas.toDataURL('image/png');
         const pdf = new jsPDF();
@@ -332,7 +395,49 @@ export const MermaidDiagramMaker: React.FC = () => {
         description: "Failed to download the diagram.",
         variant: "destructive"
       });
+    } finally {
+      diagramRef.current.style.transform = prevTransform;
     }
+  };
+
+  const getGridStyle = (): React.CSSProperties => {
+    const color = theme === 'dark' ? '#374151' : '#e5e7eb';
+    if (gridPattern === 'lines') {
+      return {
+        backgroundImage: `linear-gradient(${color} 1px, transparent 1px), linear-gradient(90deg, ${color} 1px, transparent 1px)`,
+        backgroundSize: '20px 20px'
+      };
+    }
+    if (gridPattern === 'dots') {
+      return {
+        backgroundImage: `radial-gradient(${color} 1px, transparent 1px)`,
+        backgroundSize: '20px 20px'
+      };
+    }
+    return {};
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    startPos.current = { x: e.clientX - offset.x, y: e.clientY - offset.y };
+    if (diagramContainerRef.current) {
+      diagramContainerRef.current.style.cursor = 'grabbing';
+    }
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!startPos.current) return;
+    setOffset({ x: e.clientX - startPos.current.x, y: e.clientY - startPos.current.y });
+  };
+
+  const handleMouseUp = () => {
+    startPos.current = null;
+    if (diagramContainerRef.current) {
+      diagramContainerRef.current.style.cursor = 'grab';
+    }
+    document.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('mouseup', handleMouseUp);
   };
 
   return (
@@ -371,12 +476,26 @@ export const MermaidDiagramMaker: React.FC = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <Card className="w-full max-w-md p-6 bg-card border shadow-lg">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">OpenAI API Key</h3>
+              <h3 className="text-lg font-semibold">API Configuration</h3>
               <Button variant="ghost" size="icon" onClick={() => setShowApiKeyInput(false)}>
                 <X className="h-4 w-4" />
               </Button>
             </div>
             <div className="space-y-4">
+              <div>
+                <Label htmlFor="provider">Provider</Label>
+                <Select value={provider} onValueChange={(val) => setProvider(val as any)}>
+                  <SelectTrigger id="provider" className="mt-1">
+                    <SelectValue placeholder="Select provider" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="openai">OpenAI</SelectItem>
+                    <SelectItem value="anthropic">Anthropic</SelectItem>
+                    <SelectItem value="gemini">Gemini</SelectItem>
+                    <SelectItem value="openrouter">OpenRouter</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div>
                 <Label htmlFor="api-key">API Key</Label>
                 <Input
@@ -513,6 +632,16 @@ export const MermaidDiagramMaker: React.FC = () => {
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold">Preview</h3>
                 <div className="flex items-center gap-2">
+                  <Select value={gridPattern} onValueChange={(v) => setGridPattern(v as any)}>
+                    <SelectTrigger className="w-32">
+                      <SelectValue placeholder="Grid" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="dots">Dots</SelectItem>
+                      <SelectItem value="lines">Lines</SelectItem>
+                      <SelectItem value="none">None</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <Button variant="outline" size="sm" onClick={refreshDiagram}>
                     <RefreshCw className="h-4 w-4" />
                   </Button>
@@ -528,8 +657,17 @@ export const MermaidDiagramMaker: React.FC = () => {
                   </Select>
                 </div>
               </div>
-              <div className="border rounded-lg p-4 bg-background min-h-[500px] flex items-center justify-center overflow-auto">
-                <div ref={diagramRef} className="w-full text-center" />
+              <div
+                ref={diagramContainerRef}
+                onMouseDown={handleMouseDown}
+                className="border rounded-lg p-4 bg-background min-h-[500px] flex items-center justify-center overflow-hidden cursor-grab"
+                style={getGridStyle()}
+              >
+                <div
+                  ref={diagramRef}
+                  className="inline-block select-none"
+                  style={{ transform: `translate(${offset.x}px, ${offset.y}px)` }}
+                />
               </div>
             </Card>
           </div>
