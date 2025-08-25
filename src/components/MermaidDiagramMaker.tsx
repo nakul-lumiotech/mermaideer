@@ -444,7 +444,7 @@ export const MermaidDiagramMaker: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
       {/* Header */}
       <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-40">
-        <div className="container mx-auto px-4 py-4">
+        <div className="w-full px-4 py-4">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
               Mermaid Diagram Maker
@@ -570,7 +570,7 @@ export const MermaidDiagramMaker: React.FC = () => {
       )}
 
       {/* Main Content */}
-      <div className="container mx-auto px-4 py-6">
+      <div className="w-full px-4 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left Panel - Code Editor */}
           <div className="space-y-4">
@@ -605,7 +605,7 @@ export const MermaidDiagramMaker: React.FC = () => {
               
               <div className="border rounded-lg overflow-hidden bg-background">
                 <Editor
-                  height="500px"
+                  height="70vh"
                   defaultLanguage="mermaid"
                   value={mermaidCode}
                   onChange={(value) => setMermaidCode(value || '')}
@@ -660,7 +660,7 @@ export const MermaidDiagramMaker: React.FC = () => {
               <div
                 ref={diagramContainerRef}
                 onMouseDown={handleMouseDown}
-                className="border rounded-lg p-4 bg-background min-h-[500px] flex items-center justify-center overflow-hidden cursor-grab"
+                className="border rounded-lg p-4 bg-background min-h-[70vh] flex items-center justify-center overflow-hidden cursor-grab"
                 style={getGridStyle()}
               >
                 <div
@@ -669,6 +669,14 @@ export const MermaidDiagramMaker: React.FC = () => {
                   style={{ transform: `translate(${offset.x}px, ${offset.y}px)` }}
                 />
               </div>
+              {error.hasError && (
+                <div className="mt-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                    <span>{error.message}</span>
+                  </div>
+                </div>
+              )}
             </Card>
           </div>
         </div>
