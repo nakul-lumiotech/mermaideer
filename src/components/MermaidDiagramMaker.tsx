@@ -3,10 +3,10 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Copy, Bot, Moon, Sun, Key, RefreshCw, AlertCircle, X } from 'lucide-react';
+import { Copy, Bot, Moon, Sun, Key, RefreshCw, AlertCircle, ZoomIn, ZoomOut, Maximize2, X } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useTheme } from '@/components/ui/theme-provider';
 import Editor from '@monaco-editor/react';
 import mermaid from 'mermaid';
@@ -43,15 +43,22 @@ export const MermaidDiagramMaker: React.FC = () => {
   const [apiKey, setApiKey] = useState('');
   const [provider, setProvider] = useState<'openai' | 'anthropic' | 'gemini' | 'openrouter'>('openai');
   const [showApiKeyInput, setShowApiKeyInput] = useState(false);
-  const [showAiInput, setShowAiInput] = useState(false);
   const [error, setError] = useState<ErrorState>({ hasError: false, message: '' });
   const [gridPattern, setGridPattern] = useState<'dots' | 'lines' | 'none'>('dots');
   const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [scale, setScale] = useState(1);
+  const [showTips, setShowTips] = useState(() => !localStorage.getItem('seen_tips'));
   const startPos = useRef<{ x: number; y: number } | null>(null);
   const diagramRef = useRef<HTMLDivElement>(null);
   const diagramContainerRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const { theme, setTheme } = useTheme();
+
+  useEffect(() => {
+    if (!showTips) {
+      localStorage.setItem('seen_tips', '1');
+    }
+  }, [showTips]);
 
   // Clear error when code changes
   useEffect(() => {
@@ -76,7 +83,7 @@ export const MermaidDiagramMaker: React.FC = () => {
         },
         themeVariables: {
           primaryColor: theme === 'dark' ? '#1f2937' : '#f9fafb',
-          primaryTextColor: theme === 'dark' ? '#f9fafb' : '#1f2937',
+          primaryTextColor: '#1f2937',
           primaryBorderColor: theme === 'dark' ? '#374151' : '#d1d5db',
           lineColor: theme === 'dark' ? '#6b7280' : '#4b5563',
         }
@@ -116,6 +123,10 @@ export const MermaidDiagramMaker: React.FC = () => {
           const diagramId = `mermaid-diagram-${Date.now()}`;
           const { svg } = await mermaid.render(diagramId, mermaidCode);
           element.innerHTML = svg;
+          if (theme === 'dark') {
+            element.querySelectorAll('text').forEach((t) => t.setAttribute('fill', '#1f2937'));
+          }
+          centerDiagram();
         } catch (error) {
           console.error('Mermaid rendering error:', error);
           const errorMessage = error instanceof Error ? error.message : 'Invalid Mermaid syntax';
@@ -195,6 +206,7 @@ export const MermaidDiagramMaker: React.FC = () => {
       let headers: Record<string, string> = {};
       let body: any = {};
       let parseResponse = (data: any) => '';
+      let useStream = false;
 
       switch (provider) {
         case 'anthropic':
@@ -249,7 +261,9 @@ export const MermaidDiagramMaker: React.FC = () => {
             ],
             max_tokens: 1500,
             temperature: 0.7,
+            stream: true,
           };
+          useStream = true;
           parseResponse = (data) => data.choices?.[0]?.message?.content?.trim() || '';
       }
 
@@ -264,16 +278,41 @@ export const MermaidDiagramMaker: React.FC = () => {
         throw new Error(`API Error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
       }
 
-      const data = await response.json();
-      const generatedCode = parseResponse(data);
-
-      if (!generatedCode) {
-        throw new Error('No diagram code generated');
+      if (useStream && response.body) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let result = '';
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value);
+          const lines = chunk.split('\n');
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const dataStr = line.slice(6).trim();
+              if (dataStr === '[DONE]') break;
+              try {
+                const json = JSON.parse(dataStr);
+                const text = json.choices?.[0]?.delta?.content || '';
+                result += text;
+                setMermaidCode(result);
+              } catch {
+                // ignore parse errors
+              }
+            }
+          }
+        }
+      } else {
+        const data = await response.json();
+        const generatedCode = parseResponse(data);
+        if (!generatedCode) {
+          throw new Error('No diagram code generated');
+        }
+        setMermaidCode(generatedCode);
       }
 
-      setMermaidCode(generatedCode);
-      setShowAiInput(false);
       setAiPrompt('');
+      setTimeout(centerDiagram, 300);
 
       toast({
         title: 'Diagram Generated',
@@ -440,6 +479,37 @@ export const MermaidDiagramMaker: React.FC = () => {
     document.removeEventListener('mouseup', handleMouseUp);
   };
 
+  const centerDiagram = () => {
+    const container = diagramContainerRef.current;
+    const svg = diagramRef.current?.querySelector('svg');
+    if (container && svg) {
+      const rect = svg.getBoundingClientRect();
+      const contRect = container.getBoundingClientRect();
+      setOffset({
+        x: (contRect.width - rect.width * scale) / 2,
+        y: (contRect.height - rect.height * scale) / 2,
+      });
+    }
+  };
+
+  const zoomIn = () => setScale((s) => Math.min(s + 0.1, 3));
+  const zoomOut = () => setScale((s) => Math.max(s - 0.1, 0.2));
+  const resetView = () => {
+    setScale(1);
+    setTimeout(centerDiagram, 0);
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -0.1 : 0.1;
+      setScale((s) => {
+        const next = Math.min(Math.max(s + delta, 0.2), 3);
+        return next;
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
       {/* Header */}
@@ -521,73 +591,40 @@ export const MermaidDiagramMaker: React.FC = () => {
         </div>
       )}
 
-      {/* AI Input Modal */}
-      {showAiInput && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <Card className="w-full max-w-lg p-6 bg-card border shadow-lg">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Generate with AI</h3>
-              <Button variant="ghost" size="icon" onClick={() => setShowAiInput(false)}>
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="ai-prompt">Describe your diagram</Label>
-                <Textarea
-                  id="ai-prompt"
-                  value={aiPrompt}
-                  onChange={(e) => setAiPrompt(e.target.value)}
-                  placeholder="e.g., Create a flowchart for user authentication process..."
-                  className="mt-1 min-h-[100px]"
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button 
-                  onClick={generateDiagramWithAI} 
-                  className="flex-1" 
-                  disabled={isGenerating || !aiPrompt.trim()}
-                >
-                  {isGenerating ? (
-                    <>
-                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                      Generating...
-                    </>
-                  ) : (
-                    <>
-                      <Bot className="h-4 w-4 mr-2" />
-                      Generate
-                    </>
-                  )}
-                </Button>
-                <Button variant="outline" onClick={() => setShowAiInput(false)}>
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          </Card>
-        </div>
-      )}
-
       {/* Main Content */}
       <div className="w-full px-4 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left Panel - Code Editor */}
           <div className="space-y-4">
             <Card className="p-4 bg-card border shadow-sm">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
                 <h3 className="text-lg font-semibold">Mermaid Code</h3>
-                <div className="flex items-center gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => setShowAiInput(true)}
-                    disabled={isGenerating}
-                    className="gap-2"
-                  >
-                    <Bot className="h-4 w-4" />
-                    AI Generate
-                  </Button>
+                <div className="flex items-center gap-2 flex-1 justify-end">
+                  <Input
+                    value={aiPrompt}
+                    onChange={(e) => setAiPrompt(e.target.value)}
+                    placeholder="Describe diagram..."
+                    className="max-w-xs"
+                  />
+                  <Tooltip open={showTips} onOpenChange={(o) => !o && setShowTips(false)}>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={generateDiagramWithAI}
+                        disabled={isGenerating}
+                        className="gap-2"
+                      >
+                        {isGenerating ? (
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Bot className="h-4 w-4" />
+                        )}
+                        AI
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Generate diagram with AI</TooltipContent>
+                  </Tooltip>
                   <Button variant="outline" size="sm" onClick={copyToClipboard}>
                     <Copy className="h-4 w-4" />
                   </Button>
@@ -642,6 +679,15 @@ export const MermaidDiagramMaker: React.FC = () => {
                       <SelectItem value="none">None</SelectItem>
                     </SelectContent>
                   </Select>
+                  <Button variant="outline" size="sm" onClick={zoomIn}>
+                    <ZoomIn className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={zoomOut}>
+                    <ZoomOut className="h-4 w-4" />
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={resetView}>
+                    <Maximize2 className="h-4 w-4" />
+                  </Button>
                   <Button variant="outline" size="sm" onClick={refreshDiagram}>
                     <RefreshCw className="h-4 w-4" />
                   </Button>
@@ -660,13 +706,14 @@ export const MermaidDiagramMaker: React.FC = () => {
               <div
                 ref={diagramContainerRef}
                 onMouseDown={handleMouseDown}
+                onWheel={handleWheel}
                 className="border rounded-lg p-4 bg-background min-h-[70vh] flex items-center justify-center overflow-hidden cursor-grab"
                 style={getGridStyle()}
               >
                 <div
                   ref={diagramRef}
                   className="inline-block select-none"
-                  style={{ transform: `translate(${offset.x}px, ${offset.y}px)` }}
+                  style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})` }}
                 />
               </div>
               {error.hasError && (
